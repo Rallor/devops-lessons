@@ -1,4 +1,5 @@
-lab.env
+.lab.env
 verify-report.md
 .incident-state
 *.retry
+.github/
