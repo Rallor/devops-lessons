@@ -1,0 +1,51 @@
+name: verify
+
+# Зовнішня точка огляду: перевірки виконуються не з твого ноутбука,
+# а з раннера в інтернеті. Саме тому «SSH закритий» тут перевіряється чесно.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '0 6 * * *'     # щоденний дрейф: сертифікат, бекап, failed-юніти
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: 'Етап'
+        default: '1'
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      LAB_HOST: ${{ secrets.LAB_HOST }}
+      LAB_DOMAIN: ${{ secrets.LAB_DOMAIN }}
+      LAB_SSH_USER: ${{ secrets.LAB_SSH_USER }}
+      LAB_SSH_PORT: ${{ secrets.LAB_SSH_PORT }}
+      BASTION_HOST: ${{ secrets.BASTION_HOST }}
+      ALLOW_DESTRUCTIVE: '0'
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Ключ для доступу до стенда
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s' "${{ secrets.LAB_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+      - name: Інструменти
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq netcat-openbsd dnsutils openssl
+
+      - name: Перевірки етапу
+        run: ./verify/run.sh "${{ inputs.stage || '1' }}"
+
+      - name: Звіт у підсумок запуску
+        if: always()
+        run: cat verify-report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verify-report
+          path: verify-report.md
